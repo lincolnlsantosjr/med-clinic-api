@@ -6,19 +6,28 @@ import { BcryptPasswordHasher, JwtTokenProvider } from './infra/security';
 import { TypeormUserRepository } from './repositories/typeorm-user.repository';
 import { AuthService } from './services/auth.service';
 import { UserService } from './services/user.service';
+import { PatientController } from './controllers/patient.controller';
+import { Patient } from './entities/patient.entity';
+import { TypeormPatientRepository } from './repositories/typeorm-patient.repository';
+import { PatientService } from './services/patient.service';
 
 export function buildControllers(ds: DataSource) {
   const hasher = new BcryptPasswordHasher();
   const tokens = new JwtTokenProvider();
 
   const userRepo = new TypeormUserRepository(ds.getRepository(User));
+  const patientRepo = new TypeormPatientRepository(ds.getRepository(Patient));
+
 
   const authService = new AuthService(userRepo, hasher, tokens);
   const userService = new UserService(userRepo, hasher);
+  const patientService = new PatientService(patientRepo);
+
 
   return {
     auth: new AuthController(authService),
     users: new UserController(userService),
+    patients: new PatientController(patientService),
   };
 }
 
