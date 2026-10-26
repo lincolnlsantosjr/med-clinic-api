@@ -25,5 +25,9 @@ export function buildRoutes(c: Controllers): Router {
   );
   router.delete("/patients/:id", authorize("admin"), c.patients.remove);
 
+  router.post("/doctors", authorize("admin"), c.doctors.create);
+  router.get("/doctors", c.doctors.list);
+  router.get("/doctors/:id", c.doctors.getById);
+
   return router;
 }
