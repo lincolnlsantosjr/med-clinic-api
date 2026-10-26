@@ -29,4 +29,21 @@ describe('UserService', () => {
     const { service } = build(null);
     await expect(service.getById(9)).rejects.toMatchObject({ code: 'NAO_AUTENTICADO' });
   });
+
+  
+it('getById retorna o usuário quando ele existe', async () => {
+  const user = {
+    id: 1,
+    name: 'Joana',
+    email: 'j@x.com',
+    passwordHash: 'hashed',
+    roles: ['secretary'] as const,
+  };
+
+  const { service, users } = build(user);
+
+  await expect(service.getById(1)).resolves.toEqual(user);
+  expect(users.findById).toHaveBeenCalledWith(1);
+});
+
 });
