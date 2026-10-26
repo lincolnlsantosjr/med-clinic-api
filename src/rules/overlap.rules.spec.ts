@@ -1,60 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { overlaps } from './overlap.rules';
 
+const p = (s: string, e: string) => ({ start: new Date(`2026-10-13T${s}:00Z`), end: new Date(`2026-10-13T${e}:00Z`) });
+const base = p('10:00', '10:30');
+
 describe('overlaps', () => {
-  it('retorna true quando os períodos se sobrepõem', () => {
-    const a = {
-      start: new Date('2026-10-14T10:00:00'),
-      end: new Date('2026-10-14T12:00:00'),
-    };
-
-    const b = {
-      start: new Date('2026-10-14T11:00:00'),
-      end: new Date('2026-10-14T13:00:00'),
-    };
-
-    expect(overlaps(a, b)).toBe(true);
+  it('um antes do outro', () => expect(overlaps(base, p('08:00', '09:00'))).toBe(false));
+  it('um depois do outro', () => expect(overlaps(base, p('11:00', '12:00'))).toBe(false));
+  it('encostados não conflitam', () => {
+    expect(overlaps(base, p('10:30', '11:00'))).toBe(false);
+    expect(overlaps(base, p('09:30', '10:00'))).toBe(false);
   });
-
-  it('retorna false quando os períodos não se sobrepõem', () => {
-    const a = {
-      start: new Date('2026-10-14T10:00:00'),
-      end: new Date('2026-10-14T11:00:00'),
-    };
-
-    const b = {
-      start: new Date('2026-10-14T12:00:00'),
-      end: new Date('2026-10-14T13:00:00'),
-    };
-
-    expect(overlaps(a, b)).toBe(false);
-  });
-
-  it('retorna false quando um período termina exatamente quando o outro começa', () => {
-    const a = {
-      start: new Date('2026-10-14T10:00:00'),
-      end: new Date('2026-10-14T11:00:00'),
-    };
-
-    const b = {
-      start: new Date('2026-10-14T11:00:00'),
-      end: new Date('2026-10-14T12:00:00'),
-    };
-
-    expect(overlaps(a, b)).toBe(false);
-  });
-
-  it('retorna true quando um período está inteiramente dentro do outro', () => {
-    const a = {
-      start: new Date('2026-10-14T10:00:00'),
-      end: new Date('2026-10-14T14:00:00'),
-    };
-
-    const b = {
-      start: new Date('2026-10-14T11:00:00'),
-      end: new Date('2026-10-14T12:00:00'),
-    };
-
-    expect(overlaps(a, b)).toBe(true);
-  });
+  it('um dentro do outro', () => expect(overlaps(base, p('10:10', '10:20'))).toBe(true));
+  it('cruzando a borda, com inícios diferentes', () => expect(overlaps(base, p('10:20', '10:50'))).toBe(true));
 });
