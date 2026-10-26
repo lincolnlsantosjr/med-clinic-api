@@ -29,11 +29,14 @@ export function buildRoutes(c: Controllers): Router {
   router.get("/doctors", c.doctors.list);
   router.get("/doctors/:id", c.doctors.getById);
 
-  router.get('/doctors/:id/calendar', c.appointments.calendar);
-router.post('/appointments', authorize('admin', 'secretary'), c.appointments.create);
-router.get('/appointments', c.appointments.list);
-router.get('/appointments/:id', c.appointments.getById);
+  router.get("/doctors/:id/calendar", c.appointments.calendar);
+  router.post(
+    "/appointments",
+    authorize("admin", "secretary"),
+    c.appointments.create,
+  );
+  router.get("/appointments", c.appointments.list);
+  router.get("/appointments/:id", c.appointments.getById);
 
   return router;
 }
-
