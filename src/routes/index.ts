@@ -33,6 +33,12 @@ export function buildRoutes(c: Controllers): Router {
 router.post('/appointments', authorize('admin', 'secretary'), c.appointments.create);
 router.get('/appointments', c.appointments.list);
 router.get('/appointments/:id', c.appointments.getById);
+  router.put(
+    "/doctors/:id/work-schedule",
+    authorize("admin"),
+    c.schedules.replace,
+  );
+  router.get("/doctors/:id/work-schedule", c.schedules.get);
 
   return router;
 }
