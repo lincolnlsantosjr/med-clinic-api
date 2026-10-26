@@ -37,4 +37,3 @@ router.get('/appointments/:id', c.appointments.getById);
   return router;
 }
 
-ETAPA 5 — feat/work-schedule (2 commits)
