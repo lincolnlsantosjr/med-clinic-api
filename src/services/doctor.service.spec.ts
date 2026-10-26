@@ -44,4 +44,14 @@ describe('DoctorService', () => {
     const { service } = build(false, false);
     expect((await service.list({ page: 1, pageSize: 20 })).meta.totalPages).toBe(0);
   });
+
+  
+it('getById devolve o médico quando ele existe', async () => {
+  const doctor = { id: 3 };
+  const { service, doctors } = build(false, false, doctor);
+
+  await expect(service.getById(3)).resolves.toEqual(doctor);
+  expect(doctors.findById).toHaveBeenCalledWith(3);
+});
+
 });
