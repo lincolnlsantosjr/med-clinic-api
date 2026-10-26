@@ -29,5 +29,12 @@ export function buildRoutes(c: Controllers): Router {
   router.get("/doctors", c.doctors.list);
   router.get("/doctors/:id", c.doctors.getById);
 
+  router.put(
+    "/doctors/:id/work-schedule",
+    authorize("admin"),
+    c.schedules.replace,
+  );
+  router.get("/doctors/:id/work-schedule", c.schedules.get);
+
   return router;
 }

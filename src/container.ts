@@ -13,6 +13,9 @@ import { PatientService } from './services/patient.service';
 import { DoctorController } from './controllers/doctor.controller';
 import { TypeormDoctorRepository } from './repositories/typeorm-doctor.repository';
 import { DoctorService } from './services/doctor.service';
+import { WorkScheduleController } from './controllers/work-schedule.controller';
+import { TypeormWorkScheduleRepository } from './repositories/typeorm-work-schedule.repository';
+import { WorkScheduleService } from './services/work-schedule.service';
 
 export function buildControllers(ds: DataSource) {
   const hasher = new BcryptPasswordHasher();
@@ -21,6 +24,8 @@ export function buildControllers(ds: DataSource) {
   const userRepo = new TypeormUserRepository(ds.getRepository(User));
   const patientRepo = new TypeormPatientRepository(ds.getRepository(Patient));
   const doctorRepo = new TypeormDoctorRepository(ds);
+  const scheduleRepo = new TypeormWorkScheduleRepository(ds);
+
 
 
 
@@ -28,6 +33,8 @@ export function buildControllers(ds: DataSource) {
   const userService = new UserService(userRepo, hasher);
   const patientService = new PatientService(patientRepo);
   const doctorService = new DoctorService(userRepo, doctorRepo, hasher);
+  const scheduleService = new WorkScheduleService(doctorRepo, scheduleRepo);
+
 
 
 
@@ -36,6 +43,7 @@ export function buildControllers(ds: DataSource) {
     users: new UserController(userService),
     patients: new PatientController(patientService),
     doctors: new DoctorController(doctorService),
+    schedules: new WorkScheduleController(scheduleService),
   };
 }
 
