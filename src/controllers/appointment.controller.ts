@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { toAppointmentDto, toCalendarItemDto } from '../dtos/mappers';
 import { actorOf } from '../middlewares/auth.middleware';
 import { AppointmentService } from '../services/appointment.service';
-import { appointmentListQuery, calendarQuery, createAppointmentBody } from '../validators/appointment.validators';
+import { appointmentListQuery, calendarQuery, createAppointmentBody, statusBody } from '../validators/appointment.validators';
 import { idParams } from '../validators/common';
 
 export class AppointmentController {
@@ -29,4 +29,10 @@ export class AppointmentController {
     const result = await this.appointments.calendar(id, from, to);
     res.json({ workSchedule: { shifts: result.shifts }, appointments: result.appointments.map(toCalendarItemDto) });
   };
+
+  updateStatus = async (req: Request, res: Response): Promise<void> => {
+  const { id } = idParams.parse(req.params);
+  const { status } = statusBody.parse(req.body);
+  res.json(toAppointmentDto(await this.appointments.changeStatus(id, status, actorOf(req))));
+};
 }

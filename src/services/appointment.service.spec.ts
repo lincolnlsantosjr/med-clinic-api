@@ -138,3 +138,60 @@ describe('AppointmentService leitura', () => {
     await expect(build({ doctor: null }).service.calendar(3, '2026-10-12', '2026-10-16')).rejects.toMatchObject({ code: 'RECURSO_NAO_ENCONTRADO' });
   });
 });
+
+describe('AppointmentService.changeStatus', () => {
+  const admin: Actor = { userId: 1, roles: ['admin'] };
+  const secretary: Actor = { userId: 2, roles: ['secretary'] };
+  const doctorActor: Actor = { userId: 7, roles: ['doctor'] };
+
+  const withStatus = (status: AppointmentModel['status']) => {
+    const ctx = build();
+    ctx.appointments.findById.mockResolvedValue({ ...stored, status });
+    return ctx;
+  };
+
+  it('médico dono coloca a consulta em andamento', async () => {
+    const { service } = withStatus('scheduled');
+    await expect(service.changeStatus(41, 'in_progress', doctorActor)).resolves.toMatchObject({ status: 'in_progress' });
+  });
+
+  it('secretária cancela consulta agendada', async () => {
+    const { service } = withStatus('scheduled');
+    await expect(service.changeStatus(41, 'cancelled', secretary)).resolves.toMatchObject({ status: 'cancelled' });
+  });
+
+  it('secretária não cancela consulta em andamento (403)', async () => {
+    const { service } = withStatus('in_progress');
+    await expect(service.changeStatus(41, 'cancelled', secretary)).rejects.toMatchObject({ code: 'ACESSO_NEGADO' });
+  });
+
+  it('secretária não inicia consulta (403)', async () => {
+    const { service } = withStatus('scheduled');
+    await expect(service.changeStatus(41, 'in_progress', secretary)).rejects.toMatchObject({ code: 'ACESSO_NEGADO' });
+  });
+
+  it('médico de outra consulta não conclui (403)', async () => {
+    const { service, doctors } = withStatus('in_progress');
+    doctors.findByUserId.mockResolvedValue({ ...doctor, id: 4 });
+    await expect(service.changeStatus(41, 'done', doctorActor)).rejects.toMatchObject({ code: 'ACESSO_NEGADO' });
+  });
+
+  it('admin conclui consulta em andamento', async () => {
+    const { service } = withStatus('in_progress');
+    await expect(service.changeStatus(41, 'done', admin)).resolves.toMatchObject({ status: 'done' });
+  });
+
+  it.each([['done', 'cancelled'], ['cancelled', 'scheduled'], ['scheduled', 'done']] as const)(
+    'transição %s -> %s é inválida (422)',
+    async (from, to) => {
+      const { service } = withStatus(from);
+      await expect(service.changeStatus(41, to, admin)).rejects.toMatchObject({ code: 'TRANSICAO_INVALIDA' });
+    },
+  );
+
+  it('404 para agendamento inexistente', async () => {
+    const { service, appointments } = build();
+    appointments.findById.mockResolvedValue(null);
+    await expect(service.changeStatus(1, 'cancelled', admin)).rejects.toMatchObject({ code: 'RECURSO_NAO_ENCONTRADO' });
+  });
+});

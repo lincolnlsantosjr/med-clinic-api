@@ -5,9 +5,7 @@ import { authenticate, authorize } from "../middlewares/auth.middleware";
 export function buildRoutes(c: Controllers): Router {
   const router = Router();
 
-  router.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
-  });
+  router.get("/health", (_req, res) => {res.json({ status: "ok" });});
   router.post("/auth/login", c.auth.login);
 
   router.use(authenticate);
@@ -18,11 +16,7 @@ export function buildRoutes(c: Controllers): Router {
   router.post("/patients", authorize("admin", "secretary"), c.patients.create);
   router.get("/patients", c.patients.list);
   router.get("/patients/:id", c.patients.getById);
-  router.patch(
-    "/patients/:id",
-    authorize("admin", "secretary"),
-    c.patients.update,
-  );
+  router.patch("/patients/:id",authorize("admin", "secretary"),c.patients.update,);
   router.delete("/patients/:id", authorize("admin"), c.patients.remove);
 
   router.post("/doctors", authorize("admin"), c.doctors.create);
@@ -30,18 +24,12 @@ export function buildRoutes(c: Controllers): Router {
   router.get("/doctors/:id", c.doctors.getById);
 
   router.get("/doctors/:id/calendar", c.appointments.calendar);
-  router.post(
-    "/appointments",
-    authorize("admin", "secretary"),
-    c.appointments.create,
-  );
+  router.post("/appointments",authorize("admin", "secretary"),c.appointments.create,);
   router.get("/appointments", c.appointments.list);
   router.get("/appointments/:id", c.appointments.getById);
-    router.put(
-    "/doctors/:id/work-schedule",
-    authorize("admin"),
-    c.schedules.replace,
-  );
+  router.patch("/appointments/:id/status", c.appointments.updateStatus);
+
+  router.put("/doctors/:id/work-schedule",authorize("admin"),c.schedules.replace,);
   router.get("/doctors/:id/work-schedule", c.schedules.get);
 
   return router;
