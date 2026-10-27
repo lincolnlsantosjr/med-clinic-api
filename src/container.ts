@@ -20,6 +20,10 @@ import { AppointmentService } from './services/appointment.service';
 import { WorkScheduleController } from './controllers/work-schedule.controller';
 import { TypeormWorkScheduleRepository } from './repositories/typeorm-work-schedule.repository';
 import { WorkScheduleService } from './services/work-schedule.service';
+import { MedicalRecordController } from './controllers/medical-record.controller';
+import { MedicalRecord } from './entities/medical-record.entity';
+import { TypeormMedicalRecordRepository } from './repositories/typeorm-medical-record.repository';
+import { MedicalRecordService } from './services/medical-record.service';
 
 export function buildControllers(ds: DataSource) {
   const hasher = new BcryptPasswordHasher();
@@ -30,6 +34,7 @@ export function buildControllers(ds: DataSource) {
   const doctorRepo = new TypeormDoctorRepository(ds);
   const appointmentRepo = new TypeormAppointmentRepository(ds.getRepository(Appointment));
   const scheduleRepo = new TypeormWorkScheduleRepository(ds);
+  const recordRepo = new TypeormMedicalRecordRepository(ds.getRepository(MedicalRecord));
 
 
   const transactions = new TypeormAppointmentTransactionRunner(ds);
@@ -40,7 +45,7 @@ export function buildControllers(ds: DataSource) {
   const doctorService = new DoctorService(userRepo, doctorRepo, hasher);
   const appointmentService = new AppointmentService(appointmentRepo, doctorRepo, patientRepo, scheduleRepo, transactions);
   const scheduleService = new WorkScheduleService(doctorRepo, scheduleRepo);
-
+  const recordService = new MedicalRecordService(recordRepo, patientRepo, doctorRepo, appointmentRepo);
 
 
 
@@ -51,6 +56,7 @@ export function buildControllers(ds: DataSource) {
     doctors: new DoctorController(doctorService),
     appointments: new AppointmentController(appointmentService),
     schedules: new WorkScheduleController(scheduleService),
+    records: new MedicalRecordController(recordService),
   };
 }
 
