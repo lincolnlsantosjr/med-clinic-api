@@ -1,0 +1,185 @@
+# MedClinic API: Etapa 2 (Agendamento, escala e prontuário)
+
+API REST administrativa de uma clínica médica. A Etapa 1 entregou a base de autenticação (JWT) e autorização por perfil (RBAC). Esta etapa adiciona as regras de negócio da clínica:
+
+- pacientes (CPF único);
+- médicos (CRM único, criados junto com o usuário de acesso, de forma atômica);
+- escala de trabalho por turno;
+- agenda do médico por período;
+- agendamento com validação contra a escala e proteção contra concorrência;
+- ciclo de vida da consulta;
+- prontuário com controle de acesso por vínculo.
+
+**API publicada:** `https://med-clinic-api.onrender.com` 
+**Health check:** `https://med-clinic-api.onrender.com/api/v1/health`
+**Board do projeto:** `https://trello.com/b/uauO56aR/med-clinic`
+
+## Escopo da etapa
+
+Rotas sob `/api/v1`, com perfis `admin`, `secretary` e `doctor`. O contrato (rotas, campos, status e códigos de erro) é fixo e verificado por bateria automatizada de testes de ponta a ponta.
+
+## Tecnologias
+
+- Node.js 22, TypeScript 5 (`strict: true`)
+- Express 5
+- TypeORM + PostgreSQL 16 (Neon em produção)
+- zod (validação de entrada)
+- bcryptjs (hash de senha) e jsonwebtoken (JWT)
+- Vitest + `@vitest/coverage-v8`
+- Docker (multi-stage) e GitHub Actions
+- Render (hospedagem) e GHCR (registro de imagens)
+
+## Pré-requisitos
+
+- Node.js 22+
+- Docker e Docker Compose
+- Git
+
+## Execução local
+
+```bash
+git clone https://github.com/lincolnlsantosjr/med-clinic-api.git
+cd med-clinic-api
+docker compose up -d          # PostgreSQL local
+cp .env.example .env          # preencha JWT_SECRET, ADMIN_EMAIL e ADMIN_PASSWORD
+npm ci
+npm run migration:run         # cria as tabelas e o administrador (seed)
+npm run dev                   # http://localhost:3000/api/v1/health
+```
+
+## Variáveis de ambiente
+
+Espelham o `.env.example`. Nenhum valor real é versionado.
+
+| Variável | Papel |
+|---|---|
+| `PORT` | Porta de escuta (a aplicação escuta em `0.0.0.0`). Padrão `3000`. |
+| `DATABASE_URL` | String de conexão do PostgreSQL. |
+| `DB_SSL` | `true` habilita SSL na conexão (obrigatório no banco gerenciado). |
+| `JWT_SECRET` | Segredo usado para assinar os tokens. |
+| `JWT_EXPIRES_IN` | Prazo de expiração do token (ex.: `1h`). |
+| `ADMIN_NAME` | Nome do primeiro administrador (seed). |
+| `ADMIN_EMAIL` | E-mail do primeiro administrador (seed). |
+| `ADMIN_PASSWORD` | Senha do primeiro administrador (seed). |
+
+## Comandos
+
+| Comando | O que faz |
+|---|---|
+| `npm run migration:run` | Aplica as migrations pendentes (inclui o seed do admin). |
+| `npm run migration:generate -- src/database/migrations/<Nome>` | Gera migration a partir das entidades. |
+| `npm run migration:revert` | Desfaz a última migration. |
+| `npm run build` | Compila para `dist/`. |
+| `npm test` | Roda os testes unitários. |
+| `npm run test:cov` | Roda os testes com cobertura (reprova abaixo de 80%). |
+| `npm run dev` | Sobe a API em modo desenvolvimento. |
+| `npm start` | Sobe a API compilada (`node dist/server.js`). |
+
+Em produção as migrations rodam na inicialização da aplicação (`runMigrations()` em `src/server.ts`). `synchronize` é sempre `false`.
+
+## Arquitetura
+
+Camadas com dependência de fora para dentro. Os services dependem de **portas** (interfaces de repositório), nunca do TypeORM.
+
+```
+Requisição → authenticate → authorize(perfil) → Controller (valida com zod)
+          → Service / Rules (regra de negócio) → Repository (TypeORM) → PostgreSQL
+Qualquer erro → errorHandler (único ponto) → envelope { statusCode, error, message }
+```
+
+```
+src/
+  config/        leitura das variáveis de ambiente
+  controllers/   HTTP: extrai dados, chama o service, devolve a resposta (sem regra de negócio)
+  database/      DataSource e migrations
+  domain/        tipos do domínio e portas (interfaces dos repositórios)
+  dtos/          mapeadores entidade → resposta da API
+  entities/      entidades TypeORM
+  errors/        AppError e catálogo de códigos (a regra não conhece status HTTP)
+  infra/         bcrypt e JWT
+  middlewares/   autenticação, autorização por perfil e tratamento de erros
+  repositories/  implementações TypeORM das portas
+  routes/        mapa de rotas e perfis exigidos
+  rules/         funções puras (sobreposição, fuso da clínica, grade da escala)
+  services/      regras de negócio
+  validators/    esquemas zod de entrada
+  container.ts   composição das dependências (injeção pelo construtor)
+```
+
+### Decisões de modelagem
+
+- **Fim da consulta guardado (`endsAt`).** É calculado no agendamento a partir da duração do turno. Mudar a escala depois não altera consultas já marcadas (RN15).
+- **Sobreposição por interseção de períodos** (`a.start < b.end && b.start < a.end`, estrito), não por igualdade de início. Consultas encostadas não conflitam.
+- **Concorrência (RN10/RF07).** A criação roda numa transação que faz `SELECT ... FOR UPDATE` na linha do **médico** (não nas consultas), depois verifica conflitos e grava. Duas requisições simultâneas para o mesmo horário resultam em um `201` e um `409 HORARIO_INDISPONIVEL`. Todas as consultas ao banco dentro da transação usam o `EntityManager` dela.
+- **Atomicidade do médico (RF03).** Usuário e médico são gravados na mesma transação.
+- **Escala em tabela própria (`work_shifts`).** Um registro por turno. `weekDay` segue o `Date.getDay()` (0 = domingo) e os horários são `HH:MM` locais da clínica (`America/Sao_Paulo`). A substituição apaga e regrava tudo numa transação.
+- **Unicidade no banco.** Constraints `uq_users_email`, `uq_patients_cpf` e `uq_doctors_crm`. Violações (`23505`) são traduzidas para os códigos `409` do contrato.
+- **Instantes em `timestamptz`**, sempre devolvidos em UTC (`Z`).
+- **Paciente com exclusão lógica** (`deletedAt`). O removido some das listagens e das buscas por id.
+- **Prontuário por vínculo.** O médico tem vínculo quando existe consulta `in_progress` ou `done` com o paciente. O autor vem do token, nunca do corpo.
+- **Consulta ativa** é a que não está `cancelled`. Cancelar libera o horário.
+
+### Padrão de nomes (RNF06)
+
+- Arquivos: `kebab-case` com sufixo do papel (`patient.service.ts`, `patient.controller.ts`, `patient.entity.ts`, `typeorm-patient.repository.ts`, `schedule.rules.ts`, `patient.validators.ts`).
+- Classes: `PascalCase` (`PatientService`, `TypeormPatientRepository`).
+- Funções e variáveis: `camelCase`. Constantes: `UPPER_SNAKE_CASE`.
+- Rotas: substantivos em inglês no plural, em minúsculas, com hífen quando composto (`/medical-records`, `/work-schedule`).
+- Campos de JSON: `camelCase`. Códigos de erro: `UPPER_SNAKE_CASE`, conforme o catálogo do contrato.
+- Tabelas: `snake_case` no plural.
+- Migrations: `<timestamp>-<Nome>.ts`.
+
+## Cobertura de testes
+
+Os testes são unitários, com dublês sobre as portas de repositório. Nenhum depende de banco, rede ou variável de ambiente.
+
+**Entram na conta:** `src/**/*.service.ts` e `src/**/*.rules.ts`. É onde estão as regras de negócio: validação do horário contra a escala, detecção de conflito, transições de status, posse do prontuário, autenticação e unicidade.
+
+**Ficam de fora:** controllers, entities, repositories, migrations, middlewares, DTOs, validators, container e bootstrap. Não contêm regra de negócio, e incluí-los inflaria o número sem testar regra alguma.
+
+**Limiar:** 80% em lines, branches, functions e statements, imposto pelo `vitest.config.ts`. O job de pull request falha se ficar abaixo.
+
+## Integração contínua e publicação
+
+- `.github/workflows/pr-workflow.yml` roda em todo pull request para `main`: `npm ci`, build e testes com cobertura. O check `validate` é obrigatório na proteção da branch `main`.
+- `.github/workflows/deploy.yml` roda a cada push na `main`: constrói a imagem Docker, publica no GHCR e dispara o Deploy Hook do Render.
+- As variáveis da aplicação ficam no painel do Render. O único segredo do GitHub é `RENDER_DEPLOY_HOOK_URL`.
+
+## Endpoints
+
+Todas as rotas ficam sob `/api/v1`.
+
+| Método | Rota | Perfis |
+|---|---|---|
+| GET | `/health` | público |
+| POST | `/auth/login` | público |
+| GET | `/users/me` | autenticado |
+| POST | `/users` | admin |
+| POST | `/patients` | admin, secretary |
+| GET | `/patients` | autenticado |
+| GET | `/patients/{id}` | autenticado |
+| PATCH | `/patients/{id}` | admin, secretary |
+| DELETE | `/patients/{id}` | admin |
+| POST | `/doctors` | admin |
+| GET | `/doctors` | autenticado |
+| GET | `/doctors/{id}` | autenticado |
+| PUT | `/doctors/{id}/work-schedule` | admin |
+| GET | `/doctors/{id}/work-schedule` | autenticado |
+| GET | `/doctors/{id}/calendar?from=&to=` | autenticado |
+| POST | `/appointments` | admin, secretary |
+| GET | `/appointments` | autenticado (doctor vê só os próprios) |
+| GET | `/appointments/{id}` | autenticado (doctor só o próprio) |
+| PATCH | `/appointments/{id}/status` | conforme a transição |
+| POST | `/patients/{id}/medical-records` | doctor com vínculo |
+| GET | `/patients/{id}/medical-records` | doctor com vínculo, admin |
+
+### Transições de status
+
+| De | Para | Quem pode |
+|---|---|---|
+| scheduled | in_progress | doctor da consulta, admin |
+| scheduled | cancelled | admin, secretary, doctor da consulta |
+| in_progress | done | doctor da consulta, admin |
+| in_progress | cancelled | admin, doctor da consulta |
+| done / cancelled | qualquer | ninguém |
+
