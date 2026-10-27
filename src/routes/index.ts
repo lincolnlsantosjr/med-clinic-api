@@ -32,5 +32,8 @@ export function buildRoutes(c: Controllers): Router {
   router.put("/doctors/:id/work-schedule",authorize("admin"),c.schedules.replace,);
   router.get("/doctors/:id/work-schedule", c.schedules.get);
 
+  router.post('/patients/:id/medical-records', c.records.create);
+  router.get('/patients/:id/medical-records', c.records.list);
+
   return router;
 }
