@@ -11,6 +11,15 @@ export interface AppointmentListInput extends PageQuery {
   doctorId?: number; patientId?: number; status?: AppointmentStatus; from?: string; to?: string;
 }
 
+type Who = 'admin' | 'secretary' | 'owner';
+
+const TRANSITIONS: Record<AppointmentStatus, Partial<Record<AppointmentStatus, readonly Who[]>>> = {
+  scheduled: { in_progress: ['owner', 'admin'], cancelled: ['admin', 'secretary', 'owner'] },
+  in_progress: { done: ['owner', 'admin'], cancelled: ['admin', 'owner'] },
+  done: {},
+  cancelled: {},
+};
+
 export class AppointmentService {
   constructor(
     private readonly appointments: AppointmentRepository,
@@ -84,4 +93,21 @@ export class AppointmentService {
     if (!actor.roles.includes('doctor')) return false;
     return (await this.doctors.findByUserId(actor.userId))?.id === doctorId;
   }
+
+  async changeStatus(id: number, next: AppointmentStatus, actor: Actor): Promise<AppointmentModel> {
+  const appointment = await this.appointments.findById(id);
+  if (!appointment) throw notFound('Agendamento');
+
+  const allowed = TRANSITIONS[appointment.status][next];
+  if (!allowed) throw new AppError('TRANSICAO_INVALIDA', `Não é possível ir de ${appointment.status} para ${next}.`);
+
+  const who: Who[] = [];
+  if (actor.roles.includes('admin')) who.push('admin');
+  if (actor.roles.includes('secretary')) who.push('secretary');
+  if (await this.isOwner(actor, appointment.doctorId)) who.push('owner');
+  if (!who.some((w) => allowed.includes(w))) {
+    throw new AppError('ACESSO_NEGADO', 'Seu perfil não pode fazer esta transição.');
+  }
+  return this.appointments.updateStatus(id, next);
+}
 }
